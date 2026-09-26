@@ -1,0 +1,13 @@
+{
+  "expo": {
+    "name": "QR AirDrop",
+    "slug": "qr-airdrop",
+    "scheme": "qrairdrop",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "ios": {"supportsTablet": false, "bundleIdentifier": "io.scummbar.qrairdrop", "infoPlist": {"UIFileSharingEnabled": true, "LSSupportsOpeningDocumentsInPlace": true}},
+    "plugins": [["expo-camera", {"cameraPermission": "Allow QR AirDrop to scan file transfer codes."}], "expo-router"]
+  }
+}
+

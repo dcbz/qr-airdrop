@@ -1,0 +1,6 @@
+node_modules/
+.expo/
+dist/
+*.ipa
+sender/qrairdrop
+.DS_Store
