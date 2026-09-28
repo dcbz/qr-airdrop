@@ -1,28 +1,30 @@
 # QR AirDrop
 
-QR AirDrop transfers a file from a terminal to an iPhone using only animated QR codes. The sender splits the file into JSON packets and renders each packet as a QR frame. The receiver scans those frames in any order, verifies chunk integrity, reconstructs the file, and shares it from the device.
+Transfer a file from a computer to an iPhone using only animated QR codes.
 
-## Components
+The project has two parts:
 
-- `sender/` — Go terminal program that reads a file, creates packetized QR frames, and renders them with a Bubble Tea UI.
-- `receiver/` — Expo React Native app that scans QR codes, validates transfer metadata, reassembles the file, and saves it to the app document directory.
-- `PROTOCOL.md` — concise protocol definition for packet structure and validation rules.
+- `sender/`: a Go terminal UI that splits a file into QR frames and loops them.
+- `receiver/`: an Expo iPhone app that scans frames in any order, verifies them, reconstructs the file, and opens the iOS share sheet.
 
-No server, account, pairing step, Wi‑Fi, or USB link is required.
+No account, server, local network, or cable is used for the transfer.
 
 ## Quick start
 
 ### Sender
 
+Install Go 1.23 or newer, then:
+
 ```bash
 cd sender
-go mod tidy
-go run . /path/to/file
+go run . path/to/file.zip
 ```
 
-Maximize the terminal window and keep the whole QR code visible. The app displays controls underneath the QR animation.
+Maximize the terminal and keep the entire QR code visible. Scan the stationary setup QR first. When the iPhone says **Ready — press Enter on the sender**, press Enter and the timed data stream begins automatically.
 
-### Receiver
+### iPhone receiver
+
+Install Node 20 or newer, then:
 
 ```bash
 cd receiver
@@ -30,38 +32,29 @@ npm install
 npx expo start --tunnel
 ```
 
-Install Expo Go on the iPhone, open the generated QR link, allow camera access, and point the device at the sender output.
+Install **Expo Go** on the iPhone and open the Expo link. Grant camera access, point the phone at the terminal, and hold it steady while the progress increases.
+
+The app writes the reconstructed bytes to its document directory, verifies SHA-256, then opens the iOS share sheet.
 
 ## Sender controls
 
 | Key | Action |
 |---|---|
-| Space | Pause or resume |
-| Left / Right | Move to previous or next frame |
-| Up / Down | Increase or decrease playback speed |
-| `r` | Restart from the first frame |
+| Enter | Start the timed data stream after setup succeeds |
+| `r` | Stop and show the setup QR again |
 | `q` | Quit |
 
-## Protocol summary
+## Practical settings
 
-Each QR payload is a JSON packet with fields for:
+The default payload is 650 raw bytes per frame at a fixed 3 frames per second. The setup QR advertises the 333 ms frame interval. Start close to the screen and move back until the entire quiet border fits inside the scanner guide.
 
-- transfer id
-- file name
-- original length
-- chunk index and total count
-- base64 chunk data
-- chunk SHA-256 hash
-- file SHA-256 hash
+Terminal QR codes depend on accurate module geometry. The sender uses each Unicode half-block's foreground and background to draw two square modules in one terminal cell. This fits a useful payload into an ordinary 120-column terminal. Disable terminal transparency and font ligatures if scanning is unreliable.
 
-The receiver rejects malformed packets, duplicate indexes, and mismatched metadata. A transfer is accepted only after all chunks are present and the reconstructed file matches the declared byte length and hash.
-
-## Validation
+## Test
 
 ```bash
 cd sender && go test ./...
-cd receiver && npm test -- --runInBand
-cd receiver && npm run typecheck
+cd receiver && npm test
 ```
 
-The project currently passes the sender Go tests and the receiver Jest + TypeScript checks.
+See [PROTOCOL.md](PROTOCOL.md) for the exact packet format.

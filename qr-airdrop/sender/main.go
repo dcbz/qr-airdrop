@@ -11,7 +11,7 @@ import (
 )
 
 type tickMsg time.Time
-type model struct { frames [][]byte; file string; index int; fps float64; paused bool; width, height int; err error }
+type model struct { setup []byte; frames [][]byte; file string; index, loops int; fps float64; streaming bool; width, height int; err error }
 
 func tick(fps float64) tea.Cmd { return tea.Tick(time.Duration(float64(time.Second)/fps), func(t time.Time) tea.Msg { return tickMsg(t) }) }
 func (m model) Init() tea.Cmd { return tick(m.fps) }
@@ -20,17 +20,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch v := msg.(type) {
 	case tea.WindowSizeMsg: m.width, m.height = v.Width, v.Height
 	case tickMsg:
-		if !m.paused { m.index = (m.index + 1) % len(m.frames) }
+		if m.streaming {
+			m.index++
+			if m.index >= len(m.frames) { m.index = 0; m.loops++ }
+		}
 		return m, tick(m.fps)
 	case tea.KeyMsg:
 		switch v.String() {
 		case "q", "ctrl+c": return m, tea.Quit
-		case " ": m.paused = !m.paused
-		case "left": m.index = (m.index - 1 + len(m.frames)) % len(m.frames)
-		case "right": m.index = (m.index + 1) % len(m.frames)
-		case "up": if m.fps < 8 { m.fps += .5 }
-		case "down": if m.fps > .5 { m.fps -= .5 }
-		case "r": m.index = 0
+		case "enter": if !m.streaming { m.streaming = true; m.index = 0 }
+		case "r": m.streaming = false; m.index = 0; m.loops = 0
 		}
 	}
 	return m, nil
@@ -38,7 +37,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m model) View() string {
 	if m.err != nil { return "Error: " + m.err.Error() + "\n\nPress q to quit.\n" }
-	qr, err := qrcode.New(string(m.frames[m.index]), qrcode.Medium)
+	payload := m.setup
+	if m.streaming { payload = m.frames[m.index] }
+	qr, err := qrcode.New(string(payload), qrcode.Medium)
 	if err != nil { return "QR error: " + err.Error() }
 	bitmap := qr.Bitmap()
 	var b strings.Builder
@@ -60,9 +61,14 @@ func (m model) View() string {
 		}
 		b.WriteString("\x1b[0m\n")
 	}
-	state := "PLAYING"; if m.paused { state = "PAUSED" }
-	b.WriteString(fmt.Sprintf("\n%s  •  frame %d/%d  •  %.1f fps  •  %s\n", m.file, m.index+1, len(m.frames), m.fps, state))
-	b.WriteString("space pause  ←/→ frame  ↑/↓ speed  r restart  q quit\n")
+	if !m.streaming {
+		b.WriteString(fmt.Sprintf("\n%s  •  SETUP QR\n", m.file))
+		b.WriteString("Scan this code with the iPhone. When it says ready, press ENTER.\n")
+		b.WriteString("r reset  q quit\n")
+	} else {
+		b.WriteString(fmt.Sprintf("\n%s  •  frame %d/%d  •  loop %d  •  %.1f fps\n", m.file, m.index+1, len(m.frames), m.loops+1, m.fps))
+		b.WriteString("r show setup QR  q quit\n")
+	}
 	return b.String()
 }
 
@@ -70,8 +76,9 @@ func main() {
 	if len(os.Args) != 2 { fmt.Fprintln(os.Stderr, "usage: qrairdrop <file>"); os.Exit(2) }
 	data, err := os.ReadFile(os.Args[1])
 	if err != nil { fmt.Fprintln(os.Stderr, err); os.Exit(1) }
-	frames, err := makePackets(os.Args[1], data, 650)
+	fps := 3.0
+	setup, frames, err := makePackets(os.Args[1], data, 650, int(1000/fps))
 	if err != nil { fmt.Fprintln(os.Stderr, err); os.Exit(1) }
-	m := model{frames: frames, file: os.Args[1], fps: 3}
+	m := model{setup: setup, frames: frames, file: os.Args[1], fps: fps}
 	if _, err := tea.NewProgram(m, tea.WithAltScreen()).Run(); err != nil { fmt.Fprintln(os.Stderr, err); os.Exit(1) }
 }
